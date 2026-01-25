@@ -1,65 +1,108 @@
-import Image from "next/image";
+'use client';
+
+import { useState, type FormEventHandler } from 'react';
+import Header from '../components/header';
+import { LoginModal } from '../components/auth';
+import { LearningInputForm, LearningStartDate, LearningContentDisplay } from '../components/learning';
+import { ReviewSchedule } from '../components/review';
+import { ResetButton, TipBox } from '../components/common';
+import { ForgettingCurveExplanation } from '../components/explanation';
+import { calculateReviewDates } from '../lib/dateUtils';
+import { REVIEW_INTERVALS } from '../lib/constants';
 
 export default function Home() {
+  const [learningContent, setLearningContent] = useState('');
+  const [reviewDates, setReviewDates] = useState<Date[] | null>(null);
+  const [learningStartDate, setLearningStartDate] = useState<Date | null>(null);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userName, setUserName] = useState<string | undefined>(undefined);
+  const hasResult = Boolean(reviewDates);
+
+  const handleSubmit: FormEventHandler<HTMLFormElement> = (e) => {
+    e.preventDefault();
+    if (learningContent.trim()) {
+      const startDate = new Date();
+      const dates = calculateReviewDates(startDate, REVIEW_INTERVALS);
+      setReviewDates(dates);
+      setLearningStartDate(startDate);
+    }
+  };
+
+  const handleReset = () => {
+    setLearningContent('');
+    setReviewDates(null);
+    setLearningStartDate(null);
+  };
+
+  const handleEmailLogin = async (email: string, password: string) => {
+    // TODO: 認証実装
+    console.log('Email login:', email);
+    setIsLoggedIn(true);
+    setUserName(email.split('@')[0]);
+    setIsLoginModalOpen(false);
+  };
+
+  const handleGoogleLogin = async () => {
+    // TODO: Google認証実装
+    console.log('Google login');
+    setIsLoggedIn(true);
+    setUserName('User');
+    setIsLoginModalOpen(false);
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    setUserName(undefined);
+    handleReset();
+  };
+
+  const handleSettingsClick = () => {
+    // TODO: 設定モーダルまたはページを表示
+    console.log('Settings clicked');
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <main className="min-h-screen flex items-center justify-center bg-linear-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
+      <div className="w-full max-w-2xl">
+        <Header
+          onLoginClick={() => setIsLoginModalOpen(true)}
+          onSettingsClick={handleSettingsClick}
+          isLoggedIn={isLoggedIn}
+          userName={userName}
+          onLogout={handleLogout}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+
+        <LoginModal
+          isOpen={isLoginModalOpen}
+          onClose={() => setIsLoginModalOpen(false)}
+          onEmailLogin={handleEmailLogin}
+          onGoogleLogin={handleGoogleLogin}
+        />
+
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
+          {!hasResult ? (
+            <LearningInputForm
+              value={learningContent}
+              onChange={setLearningContent}
+              onSubmit={handleSubmit}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          ) : (
+            <div className="space-y-6">
+              {learningStartDate && <LearningStartDate date={learningStartDate} />}
+              <LearningContentDisplay content={learningContent} />
+
+              {reviewDates && <ReviewSchedule reviewDates={reviewDates} />}
+
+              <ResetButton onClick={handleReset} />
+
+              <TipBox />
+            </div>
+          )}
         </div>
-      </main>
-    </div>
+
+        <ForgettingCurveExplanation />
+      </div>
+    </main>
   );
 }

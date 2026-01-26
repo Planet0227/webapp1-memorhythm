@@ -1,5 +1,25 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+**Memorhythm** — エビングハウスの忘却曲線に基づく復習タイミング提案アプリ（MVP + Phase 1 認証）
+
+## Phase 1: 認証セットアップ
+
+ログイン・新規登録を動かすには環境変数が必要です。
+
+1. **環境変数**
+   - `cp env.example .env.local`（Windows: `copy env.example .env.local`）
+   - `.env.local` を編集し、以下を設定:
+     - **必須**: `AUTH_SECRET`（例: `openssl rand -base64 32` で生成）
+     - **必須**: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`（[Supabase](https://supabase.com/dashboard) でプロジェクト作成 → Settings → API）
+     - **任意**: `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`（[Google Cloud Console](https://console.cloud.google.com/apis/credentials) で OAuth 2.0 クライアント作成。リダイレクト URI: `http://localhost:3000/api/auth/callback/google`）
+
+2. **Supabase**
+   - プロジェクトで **Authentication** → **Providers** で **Email** を有効化
+   - メール確認をオフにすると、サインアップ後すぐログイン可能（開発時のみ推奨）
+
+3. **開発サーバー**
+   - `npm run dev` 後、[http://localhost:3000](http://localhost:3000) でログインモーダルからメール/Google 認証を試せます。
+
 ## Getting Started
 
 First, run the development server:

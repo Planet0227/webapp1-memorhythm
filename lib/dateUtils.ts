@@ -17,16 +17,6 @@ export function formatDate(date: Date): string {
   const month = date.getMonth() + 1;
   const day = date.getDate();
   
-  // 今日かどうか
-  // if (date.toDateString() === today.toDateString()) {
-  //   return '今日';
-  // }
-  
-  // 明日かどうか
-  // if (date.toDateString() === tomorrow.toDateString()) {
-  //   return '明日';
-  // }
-  
   // 曜日を取得
   const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
   const weekday = weekdays[date.getDay()];

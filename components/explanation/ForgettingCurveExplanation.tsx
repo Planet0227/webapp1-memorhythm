@@ -40,9 +40,9 @@ export default function ForgettingCurveExplanation() {
     <section className="mt-16 mb-8">
 
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 border border-gray-100 dark:border-gray-700">
-        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-6 border border-green-100 dark:border-green-800 mb-6">
+        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-6 border border-green-100 dark:border-green-800 mb-6" id="how-to-use">
           <h3 className="text-xl font-semibold mb-3 text-gray-900 dark:text-gray-100">
-            ✅ このアプリの使い方
+            ✅ Memorhythmの使い方
           </h3>
           <p className="leading-relaxed">
             学習内容を入力すると、エビングハウスの忘却曲線に基づいて最適な復習タイミングを自動計算します。

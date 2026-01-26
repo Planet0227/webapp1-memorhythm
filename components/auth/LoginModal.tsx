@@ -1,44 +1,86 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+
+export type EmailAuthResult = { error?: string; successMessage?: string; requiresEmailConfirmation?: boolean } | void;
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onEmailLogin: (email: string, password: string) => void;
+  onEmailAuth: (email: string, password: string, isSignUp: boolean) => Promise<EmailAuthResult>;
   onGoogleLogin: () => void;
+  initialMessage?: string | null;
 }
 
 export default function LoginModal({
   isOpen,
   onClose,
-  onEmailLogin,
+  onEmailAuth,
   onGoogleLogin,
+  initialMessage,
 }: LoginModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // 初期メッセージを設定（メール確認後など）
+  useEffect(() => {
+    if (initialMessage && isOpen) {
+      setSuccessMessage(initialMessage);
+      setIsSignUp(false); // ログインモードに設定
+    }
+  }, [initialMessage, isOpen]);
 
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setSuccessMessage(null);
     setIsLoading(true);
     try {
-      await onEmailLogin(email, password);
+      const result = await onEmailAuth(email, password, isSignUp);
+      if (result?.error) {
+        setError(result.error);
+        return;
+      }
+      if (result?.successMessage) {
+        setSuccessMessage(result.successMessage);
+        if (result.requiresEmailConfirmation) {
+          // 確認メール送信後はログインモードに切り替え
+          setIsSignUp(false);
+        } else {
+          // ログイン成功時はモーダルを閉じる
+          setTimeout(() => {
+            onClose();
+          }, 1500);
+        }
+        return;
+      }
+      // 通常のログイン成功
+      onClose();
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
+    setError(null);
     setIsLoading(true);
     try {
       await onGoogleLogin();
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleToggleSignUp = () => {
+    setIsSignUp((s) => !s);
+    setError(null);
+    setSuccessMessage(null);
   };
 
   return (
@@ -76,6 +118,16 @@ export default function LoginModal({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+              {error}
+            </div>
+          )}
+          {successMessage && (
+            <div className="rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300">
+              {successMessage}
+            </div>
+          )}
           <div>
             <label
               htmlFor="email"
@@ -165,7 +217,8 @@ export default function LoginModal({
 
         <div className="mt-6 text-center">
           <button
-            onClick={() => setIsSignUp(!isSignUp)}
+            type="button"
+            onClick={handleToggleSignUp}
             className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
             disabled={isLoading}
           >

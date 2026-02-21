@@ -13,16 +13,19 @@ import { calculateReviewDates } from '../lib/dateUtils';
 import { REVIEW_INTERVALS } from '../lib/constants';
 
 export default function Home() {
-  const { data: session, status } = useSession();
+  //　セッション情報
+  const { data: session, status } = useSession(); //auth.tsのsessionで整えたオブジェクトを取得
   const searchParams = useSearchParams();
-  const [learningContent, setLearningContent] = useState('');
-  const [reviewDates, setReviewDates] = useState<Date[] | null>(null);
-  const [learningStartDate, setLearningStartDate] = useState<Date | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [emailConfirmedMessage, setEmailConfirmedMessage] = useState<string | null>(null);
-  const hasResult = Boolean(reviewDates);
   const isLoggedIn = status === 'authenticated' && !!session?.user;
   const userName = session?.user?.name ?? session?.user?.email?.split('@')[0];
+  const [emailConfirmedMessage, setEmailConfirmedMessage] = useState<string | null>(null);
+  
+  //  学習情報
+  const [learningStartDate, setLearningStartDate] = useState<Date | null>(null);
+  const [learningContent, setLearningContent] = useState('');
+  const [reviewDates, setReviewDates] = useState<Date[] | null>(null);
+  const hasResult = Boolean(reviewDates);
 
   // メール確認後のリダイレクトを検知
   useEffect(() => {
@@ -68,12 +71,16 @@ export default function Home() {
         requiresEmailConfirmation?: boolean;
       };
       if (!res.ok) return { error: json.error ?? '登録に失敗しました' };
-      // 新規登録成功時は認証待ちページにリダイレクト
-      if (json.requiresEmailConfirmation) {
+
+      // requiresEmailConfirmation が未定義でも安全側（認証必須）に倒す。
+      const requiresEmailConfirmation = json.requiresEmailConfirmation !== false;
+      if (requiresEmailConfirmation) {
+        // 確認メール送信後の案内ページへ
         window.location.href = `/verify-email?email=${encodeURIComponent(email)}`;
-        return; // リダイレクトするので何も返さない
+        return; // リダイレクトするのでここでは何も返さない
       }
-      // メール確認が不要な場合はそのままログイン
+
+      // メール認証が不要な場合はそのまま NextAuth でログイン
       const result = await signIn('credentials', {
         email,
         password,
@@ -84,6 +91,7 @@ export default function Home() {
       }
       return { successMessage: '登録が完了しました' };
     }
+    
     // ログイン処理
     const result = await signIn('credentials', {
       email,
@@ -92,9 +100,9 @@ export default function Home() {
     });
     if (result?.error) {
       // メール未確認の場合のエラーメッセージを改善
-      let msg =
+      const msg =
         result.error === 'CredentialsSignin'
-          ? 'メールアドレスまたはパスワードが正しくありません。確認メールのリンクをクリックしてメールアドレスを確認しましたか？'
+          ? 'メールアドレス,パスワードが正しくありません。または、確認メールのリンクをクリックしてメールアドレスを確認してください。'
           : result.error;
       return { error: msg };
     }

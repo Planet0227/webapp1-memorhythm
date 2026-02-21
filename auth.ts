@@ -13,6 +13,7 @@ function getSupabaseAuthClient() {
 
 const googleId = process.env.AUTH_GOOGLE_ID;
 const googleSecret = process.env.AUTH_GOOGLE_SECRET;
+
 const providers = [
   Credentials({
     name: 'credentials',
@@ -24,6 +25,7 @@ const providers = [
       const email = credentials?.email as string | undefined;
       const password = credentials?.password as string | undefined;
       if (!email || !password) return null;
+
       const supabase = getSupabaseAuthClient();
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -52,12 +54,17 @@ const providers = [
 
 export const { handlers, auth } = NextAuth({
   providers,
+  // セッションの有効期限を30日に設定
   session: { strategy: 'jwt', maxAge: 30 * 24 * 60 * 60 },
+  // 信頼するホスト名を設定
   trustHost: true,
+  // ログインが必要なときのリダイレクト先を設定
   pages: {
     signIn: '/',
   },
+  // JWTとセッションのコールバックを設定
   callbacks: {
+    // authorize が返した user を token にコピー
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
@@ -67,6 +74,7 @@ export const { handlers, auth } = NextAuth({
       }
       return token;
     },
+    // token にコピーした userデータ を session にコピー
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;

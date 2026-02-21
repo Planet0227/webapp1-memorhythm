@@ -33,6 +33,8 @@ export async function POST(request: Request) {
       const msg =
         error.message === 'User already registered'
           ? 'このメールアドレスは既に登録されています'
+          : error.message === 'Error sending confirmation email'
+            ? '確認メールの送信に失敗しました。Supabase の Email Provider / Custom SMTP 設定（Sender, Host, Port, 認証情報）を確認してください。'
           : error.message;
       return NextResponse.json({ error: msg }, { status: 400 });
     }
@@ -42,8 +44,9 @@ export async function POST(request: Request) {
         { status: 500 }
       );
     }
-    // メール確認が必要かどうかを判定（Supabaseの設定による）
-    const requiresEmailConfirmation = data.user.email_confirmed_at === null;
+    // Supabase は「メール確認が必要な場合」session を返さないため、
+    // email_confirmed_at ではなく session の有無で判定する。
+    const requiresEmailConfirmation = !data.session;
     return NextResponse.json({
       ok: true,
       requiresEmailConfirmation,

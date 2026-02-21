@@ -1,8 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 
-export type EmailAuthResult = { error?: string; successMessage?: string; requiresEmailConfirmation?: boolean } | void;
+export type EmailAuthResult = { 
+  error?: string; 
+  successMessage?: string; 
+  requiresEmailConfirmation?: boolean } | void;
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -21,6 +25,7 @@ export default function LoginModal({
 }: LoginModalProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +39,7 @@ export default function LoginModal({
     }
   }, [initialMessage, isOpen]);
 
+  // modalが閉じているなら非表示
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,7 +62,7 @@ export default function LoginModal({
           // ログイン成功時はモーダルを閉じる
           setTimeout(() => {
             onClose();
-          }, 1500);
+          }, 500);
         }
         return;
       }
@@ -86,18 +92,34 @@ export default function LoginModal({
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
-      onClick={onClose}
+      onClick={() => {
+        setIsSignUp(false);
+        onClose();
+      }}
     >
       <div
-        className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-8 border border-gray-100 dark:border-gray-700"
+        className={`bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-xl p-8 border-2 transition-colors ${
+          isSignUp
+            ? 'border-lime-400 dark:border-lime-500'
+            : 'border-blue-400 dark:border-blue-500'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          <h2
+            className={`text-2xl font-bold ${
+              isSignUp
+                ? 'text-lime-600 dark:text-lime-400'
+                : 'text-blue-600 dark:text-blue-400'
+            }`}
+          >
             {isSignUp ? '新規登録' : 'ログイン'}
           </h2>
           <button
-            onClick={onClose}
+            onClick={() => {
+              setIsSignUp(false);
+              onClose();
+            }}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
             aria-label="閉じる"
           >
@@ -142,7 +164,9 @@ export default function LoginModal({
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="example@email.com"
-              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
+              className={`w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all ${
+                isSignUp ? 'focus:ring-lime-500' : 'focus:ring-blue-500'
+              }`}
               disabled={isLoading}
             />
           </div>
@@ -154,23 +178,44 @@ export default function LoginModal({
             >
               パスワード
             </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              placeholder="••••••••"
-              minLength={6}
-              className="w-full px-4 py-3 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all"
-              disabled={isLoading}
-            />
+            <div className="relative">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                placeholder="••••••••"
+                minLength={6}
+                className={`w-full px-4 py-3 pr-12 border-2 border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 transition-all ${
+                  isSignUp ? 'focus:ring-lime-500' : 'focus:ring-blue-500'
+                }`}
+                disabled={isLoading}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 flex items-center px-4 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 disabled:cursor-not-allowed"
+                aria-label={showPassword ? 'パスワードを非表示' : 'パスワードを表示'}
+                disabled={isLoading}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-5 w-5" />
+                ) : (
+                  <Eye className="h-5 w-5" />
+                )}
+              </button>
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3 px-6 bg-linear-to-r from-blue-500 to-purple-500 text-white font-semibold rounded-xl hover:from-blue-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+            className={`w-full py-3 px-6 text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98] shadow-lg ${
+              isSignUp
+                ? 'bg-linear-to-r from-lime-500 to-green-500 hover:from-lime-600 hover:to-green-600'
+                : 'bg-linear-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600'
+            }`}
           >
             {isLoading ? '処理中...' : isSignUp ? '新規登録' : 'ログイン'}
           </button>
@@ -219,7 +264,11 @@ export default function LoginModal({
           <button
             type="button"
             onClick={handleToggleSignUp}
-            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+            className={`text-sm hover:underline ${
+              isSignUp
+                ? 'text-blue-600 dark:text-blue-400'
+                : 'text-lime-600 dark:text-lime-400'
+            }`}
             disabled={isLoading}
           >
             {isSignUp

@@ -1,76 +1,100 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { signIn } from 'next-auth/react';
 import { createClient } from '@/lib/supabase/client';
 import Header from '@/components/header';
 
 export default function VerifyEmailPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const hasStartedVerification = useRef(false);
   const [email, setEmail] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resendMessage, setResendMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    // URLパラメータからメールアドレスを取得
-    const emailParam = searchParams.get('email');
-    if (emailParam) {
-      setEmail(emailParam);
-    }
-
-    // ハッシュフラグメント（#access_token=...）をチェック
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token')) {
-      handleEmailVerification(hash);
-    }
-  }, [searchParams]);
-
-  const handleEmailVerification = async (hash: string) => {
+  // Supabase のメールリンクは環境や設定で以下の形式があり得る:
+  // - #access_token=...&refresh_token=...
+  // - ?token_hash=...&type=signup
+  // - ?code=...
+  // どの形式でもこのページで受けて自動ログインまで完了させる。
+  const handleEmailVerification = useCallback(async () => {
     setIsVerifying(true);
     setError(null);
 
     try {
-      // ハッシュからトークンを抽出
-      const params = new URLSearchParams(hash.substring(1));
-      const accessToken = params.get('access_token');
-      const refreshToken = params.get('refresh_token');
-      const type = params.get('type');
+      const hashParams = new URLSearchParams(
+        window.location.hash.startsWith('#')
+          ? window.location.hash.substring(1)
+          : window.location.hash
+      );
+      const queryParams = new URLSearchParams(
+        window.location.search.startsWith('?')
+          ? window.location.search.substring(1)
+          : window.location.search
+      );
+      const getParam = (key: string) => hashParams.get(key) ?? queryParams.get(key);
+      const accessToken = getParam('access_token');
+      const refreshToken = getParam('refresh_token');
+      const tokenHash = getParam('token_hash');
+      const type = getParam('type');
+      const code = getParam('code');
 
-      if (!accessToken || type !== 'signup') {
-        throw new Error('無効な認証トークンです');
-      }
-
-      // Supabaseクライアントでセッションを確立
-      const supabase = createClient();
-      const { data: sessionData, error: sessionError } =
-        await supabase.auth.setSession({
+      if (accessToken) {
+        const supabase = createClient();
+        const { error: sessionError } = await supabase.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken || '',
         });
+        if (sessionError) {
+          throw new Error(sessionError.message);
+        }
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError || !user) {
+          throw new Error('認証に失敗しました');
+        }
+        if (!user.email_confirmed_at) {
+          throw new Error('メールアドレスがまだ確認されていません');
+        }
+      } else if (code || (tokenHash && type)) {
+        const res = await fetch('/api/auth/verify-email', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            code,
+            tokenHash,
+            type,
+          }),
+        });
 
-      if (sessionError || !sessionData.user) {
-        throw new Error('認証に失敗しました');
+        const json = (await res.json()) as {
+          error?: string;
+          ok?: boolean;
+          user?: { id: string; email: string };
+        };
+        if (!res.ok || json.error) {
+          throw new Error(json.error ?? 'メール認証に失敗しました');
+        }
+      } else {
+        throw new Error('認証トークンが見つかりませんでした');
       }
-
-      const user = sessionData.user;
-
-      // メールアドレスが確認されているかチェック
-      if (!user.email_confirmed_at) {
-        throw new Error('メールアドレスがまだ確認されていません');
-      }
-
-      // Supabaseのセッションからユーザー情報を取得してNextAuthでログイン
-      // パスワードは不要なので、一時的なトークンを使ってログイン
-      // 実際には、Supabaseのセッションが確立されているので、
-      // そのユーザー情報を使ってNextAuthのセッションを作成する必要がある
 
       // SupabaseのセッションからNextAuthのセッションを作成
-      // パスワードなしでログインするため、カスタムAPIエンドポイントを使用
+      // CSRF 対策用のカスタムヘッダーを含める
       const res = await fetch('/api/auth/create-session', {
         method: 'POST',
-        credentials: 'include', // Cookieを含める
+        credentials: 'include',
+        headers: {
+          'x-csrf-protection': '1',
+        },
       });
 
       const json = (await res.json()) as {
@@ -82,8 +106,7 @@ export default function VerifyEmailPage() {
         throw new Error(json.error ?? 'ログインに失敗しました');
       }
 
-      // セッション作成成功後、ページをリロードしてNextAuthのセッションを確認
-      // 実際には、NextAuthのセッションCookieが設定されているので、ページをリロードすればログイン状態になる
+      // セッション作成成功後、トップページへ遷移
       window.location.href = '/';
     } catch (e) {
       console.error('Email verification error', e);
@@ -92,7 +115,67 @@ export default function VerifyEmailPage() {
       );
       setIsVerifying(false);
     }
+  }, []);
+
+  // 確認メールの再送処理
+  const handleResendEmail = async () => {
+    if (!email) return;
+
+    setIsResending(true);
+    setResendMessage(null);
+    setError(null);
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/verify-email`,
+        },
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      setResendMessage('確認メールを再送しました。メールボックスをご確認ください。');
+    } catch (e) {
+      console.error('Resend email error', e);
+      setError(
+        e instanceof Error ? e.message : 'メールの再送に失敗しました'
+      );
+    } finally {
+      setIsResending(false);
+    }
   };
+
+  useEffect(() => {
+    // URLパラメータからメールアドレスを取得
+    const emailParam = searchParams.get('email');
+    if (emailParam) {
+      setEmail(emailParam);
+    }
+
+    if (hasStartedVerification.current) {
+      return;
+    }
+
+    // ハッシュフラグメント（#access_token=...）または
+    // クエリパラメータ（?access_token=..., ?token_hash=..., ?code=...）をチェック
+    const hash = window.location.hash;
+    const hasHashToken =
+      hash.includes('access_token=') || hash.includes('token_hash=');
+    const hasQueryToken =
+      searchParams.has('access_token') ||
+      searchParams.has('token_hash') ||
+      searchParams.has('code');
+
+    if (hasHashToken || hasQueryToken) {
+      hasStartedVerification.current = true;
+      void handleEmailVerification();
+    }
+  }, [searchParams, handleEmailVerification]);
 
   return (
     <main className="min-h-screen flex flex-col bg-linear-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-4">
@@ -172,6 +255,11 @@ export default function VerifyEmailPage() {
                         '確認メールを送信しました。'
                       )}
                     </p>
+                    {resendMessage && (
+                      <div className="rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 px-4 py-3 text-sm text-green-700 dark:text-green-300">
+                        {resendMessage}
+                      </div>
+                    )}
                     <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl p-4 text-sm text-blue-800 dark:text-blue-200">
                       <p className="font-semibold mb-2">次の手順：</p>
                       <ol className="list-decimal list-inside space-y-1">
@@ -183,6 +271,15 @@ export default function VerifyEmailPage() {
                     <p className="text-sm text-gray-500 dark:text-gray-400">
                       メールが届かない場合は、迷惑メールフォルダもご確認ください。
                     </p>
+                    {email && (
+                      <button
+                        onClick={handleResendEmail}
+                        disabled={isResending}
+                        className="w-full px-4 py-3 text-sm font-medium text-blue-600 dark:text-blue-400 border-2 border-blue-200 dark:border-blue-800 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {isResending ? '送信中...' : '確認メールを再送する'}
+                      </button>
+                    )}
                   </div>
                 </>
               )}

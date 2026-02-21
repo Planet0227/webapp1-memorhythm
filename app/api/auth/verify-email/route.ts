@@ -1,25 +1,44 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import type { EmailOtpType } from '@supabase/supabase-js';
 
 /**
- * メール確認後の自動ログイン処理
- * Supabaseのセッションからユーザー情報を取得し、NextAuthのセッションを作成
+ * メール確認リンクの検証処理
+ * - code(PKCE) はサーバーで exchange
+ * - token_hash はサーバーで verifyOtp
+ * その後、Supabase セッションのユーザーを確認して返す
  */
 export async function POST(request: Request) {
   try {
-    const { userId, email } = (await request.json()) as {
-      userId?: string;
-      email?: string;
+    const { code, tokenHash, type } = (await request.json()) as {
+      code?: string;
+      tokenHash?: string;
+      type?: EmailOtpType;
     };
 
-    if (!userId || !email) {
+    if (!code && !(tokenHash && type)) {
       return NextResponse.json(
-        { error: 'ユーザー情報がありません' },
+        { error: '認証パラメータがありません' },
         { status: 400 }
       );
     }
 
     const supabase = await createClient();
+
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+    } else if (tokenHash && type) {
+      const { error } = await supabase.auth.verifyOtp({
+        token_hash: tokenHash,
+        type,
+      });
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 400 });
+      }
+    }
 
     // Supabaseのセッションを確認
     const {
@@ -27,7 +46,7 @@ export async function POST(request: Request) {
       error: userError,
     } = await supabase.auth.getUser();
 
-    if (userError || !user || user.id !== userId) {
+    if (userError || !user) {
       return NextResponse.json(
         { error: '認証セッションが無効です' },
         { status: 401 }
@@ -42,9 +61,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 認証成功
-    // クライアント側でNextAuthのセッションを作成するために、
-    // ユーザー情報を返す（実際のログイン処理はクライアント側で行う）
+    // 認証成功。create-session API で NextAuth セッション作成へ進む。
     return NextResponse.json({
       ok: true,
       user: {

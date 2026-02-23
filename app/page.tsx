@@ -9,41 +9,91 @@ import { LearningInputForm, LearningStartDate, LearningContentDisplay } from '..
 import { ReviewSchedule } from '../components/review';
 import { ResetButton, TipBox } from '../components/common';
 import { ForgettingCurveExplanation } from '../components/explanation';
+import { StudyHistoryList } from '../components/history';
 import { calculateReviewDates } from '../lib/dateUtils';
 import { REVIEW_INTERVALS } from '../lib/constants';
+
+type SaveStatus = {
+  type: 'success' | 'error' | 'info';
+  message: string;
+};
 
 export default function Home() {
   //　セッション情報
   const { data: session, status } = useSession(); //auth.tsのsessionで整えたオブジェクトを取得
   const searchParams = useSearchParams();
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const isEmailConfirmed = searchParams.get('emailConfirmed') === 'true';
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(isEmailConfirmed);
   const isLoggedIn = status === 'authenticated' && !!session?.user;
   const userName = session?.user?.name ?? session?.user?.email?.split('@')[0];
-  const [emailConfirmedMessage, setEmailConfirmedMessage] = useState<string | null>(null);
+  const [emailConfirmedMessage, setEmailConfirmedMessage] = useState<string | null>(
+    isEmailConfirmed ? 'メールアドレスが確認されました。ログインしてください。' : null
+  );
   
   //  学習情報
   const [learningStartDate, setLearningStartDate] = useState<Date | null>(null);
   const [learningContent, setLearningContent] = useState('');
   const [reviewDates, setReviewDates] = useState<Date[] | null>(null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus | null>(null);
   const hasResult = Boolean(reviewDates);
 
   // メール確認後のリダイレクトを検知
   useEffect(() => {
-    if (searchParams.get('emailConfirmed') === 'true') {
-      setEmailConfirmedMessage('メールアドレスが確認されました。ログインしてください。');
-      setIsLoginModalOpen(true);
+    if (isEmailConfirmed) {
       // URLからクエリパラメータを削除
       window.history.replaceState({}, '', '/');
     }
-  }, [searchParams]);
+  }, [isEmailConfirmed]);
 
-  const handleSubmit: FormEventHandler<HTMLFormElement> = (e) => {
+  const handleSubmit: FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
-    if (learningContent.trim()) {
-      const startDate = new Date();
-      const dates = calculateReviewDates(startDate, REVIEW_INTERVALS);
-      setReviewDates(dates);
-      setLearningStartDate(startDate);
+    const trimmedContent = learningContent.trim();
+    if (!trimmedContent) return;
+
+    setSaveStatus(null);
+
+    const startDate = new Date();
+    const dates = calculateReviewDates(startDate, REVIEW_INTERVALS);
+    setReviewDates(dates);
+    setLearningStartDate(startDate);
+
+    if (!isLoggedIn || !session?.user?.id) {
+      setSaveStatus({
+        type: 'info',
+        message: 'ログインすると学習内容をアカウントに保存できます。',
+      });
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/learning-records', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: trimmedContent,
+          learningStartedAt: startDate.toISOString(), //日付の形式を標準にして渡す
+        }),
+      });
+      const json = (await res.json()) as { error?: string; ok?: boolean; recordId?: string; };
+
+      if (!res.ok || !json.ok) {
+        setSaveStatus({
+          type: 'error',
+          message: json.error ?? '学習内容の保存に失敗しました。',
+        });
+        return;
+      }
+
+      setSaveStatus({
+        type: 'success',
+        message: '学習内容を保存しました。',
+      });
+    } catch (error) {
+      console.error('learning-record save error', error);
+      setSaveStatus({
+        type: 'error',
+        message: '通信エラーにより保存できませんでした。',
+      });
     }
   };
 
@@ -51,6 +101,7 @@ export default function Home() {
     setLearningContent('');
     setReviewDates(null);
     setLearningStartDate(null);
+    setSaveStatus(null);
   };
 
   const handleEmailAuth = async (
@@ -161,6 +212,11 @@ export default function Home() {
           <div className="w-full max-w-2xl mx-auto">
             <ForgettingCurveExplanation />
           </div>
+          {isLoggedIn && (
+            <div className="w-full max-w-2xl mx-auto mt-6">
+              <StudyHistoryList limit={5} showViewAllLink title="最近の学習履歴" />
+            </div>
+          )}
         </>
       ) : (
         <div className="w-full max-w-2xl flex-1 flex flex-col mx-auto">
@@ -175,6 +231,19 @@ export default function Home() {
             <div className="space-y-6">
               {learningStartDate && <LearningStartDate date={learningStartDate} />}
               <LearningContentDisplay content={learningContent} />
+              {saveStatus && (
+                <div
+                  className={`rounded-xl px-4 py-3 text-sm border ${
+                    saveStatus.type === 'success'
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+                      : saveStatus.type === 'info'
+                        ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                        : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                  }`}
+                >
+                  {saveStatus.message}
+                </div>
+              )}
 
               {reviewDates && <ReviewSchedule reviewDates={reviewDates} />}
 

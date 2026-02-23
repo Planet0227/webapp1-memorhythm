@@ -1,8 +1,8 @@
 // 復習日を計算する関数
 export function calculateReviewDates(startDate: Date, intervals: readonly number[]): Date[] {
-  return intervals.map(days => {
+  return intervals.map(day => {
     const date = new Date(startDate);
-    date.setDate(date.getDate() + days);
+    date.setDate(date.getDate() + day); //学習開始日の日付を抽出し、復習ペースを足す
     return date;
   });
 }
@@ -34,4 +34,26 @@ export function getDaysUntil(date: Date): number {
   const diffTime = targetDate.getTime() - today.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays;
+}
+
+// 学習開始日と復習間隔から、次に来る復習日を取得
+export function getNextReviewDate(
+  startDate: Date,
+  intervals: readonly number[],
+  now: Date = new Date()
+): Date | null {
+  const today = new Date(now);
+  today.setHours(0, 0, 0, 0); //日付情報だけするために午前0時0分0秒0ミリ秒に書き換え
+
+  // 一番近い復習日を算出
+  const reviewDates = calculateReviewDates(startDate, intervals); //４日分の復習日を格納
+  for (const reviewDate of reviewDates) {
+    const reviewDay = new Date(reviewDate);
+    reviewDay.setHours(0, 0, 0, 0);
+    if (reviewDay.getTime() >= today.getTime()) {
+      return reviewDate;
+    }
+  }
+
+  return null;
 }

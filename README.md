@@ -20,6 +20,18 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 3. **開発サーバー**
    - `npm run dev` 後、[http://localhost:3000](http://localhost:3000) でログインモーダルからメール/Google 認証を試せます。
 
+## Phase 2: 学習内容の保存（最小実装）
+
+ログイン中ユーザーの学習内容を保存するには、以下を追加で設定します。
+
+1. **DBテーブル作成**
+   - Supabase の SQL Editor で `docs/PHASE2_DB_SETUP.sql` を実行
+
+2. **環境変数**
+   - `.env.local` に `SUPABASE_SERVICE_ROLE_KEY` を設定
+   - 値は Supabase Dashboard → Settings → API → `service_role` を使用
+   - `SUPABASE_SERVICE_ROLE_KEY` はサーバー専用のため、公開しないでください
+
 ## Getting Started
 
 First, run the development server:
